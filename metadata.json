@@ -1,0 +1,6 @@
+{
+  "name": "ShopStack",
+  "description": "Clean Minimalist Utility E-Commerce Platform with customer store and admin management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
