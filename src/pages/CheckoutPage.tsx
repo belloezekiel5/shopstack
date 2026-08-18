@@ -26,21 +26,21 @@ export const CheckoutPage: React.FC = () => {
 
   // Form State
   const [shippingData, setShippingData] = useState({
-    fullName: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-    street: user?.address?.street || '',
-    city: user?.address?.city || '',
-    state: user?.address?.state || '',
-    postalCode: user?.address?.postalCode || '',
+    fullName: user?.name || 'Jordan Lee',
+    email: user?.email || 'customer@shopstack.com',
+    phone: user?.phone || '+1 (555) 847-1920',
+    street: user?.address?.street || '742 Evergreen Terrace',
+    city: user?.address?.city || 'Springfield',
+    state: user?.address?.state || 'OR',
+    postalCode: user?.address?.postalCode || '97477',
     country: user?.address?.country || 'United States'
   });
 
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'cod'>('card');
   const [cardData, setCardData] = useState({
-    cardNumber: '',
-    cardExp: '',
-    cardCvc: ''
+    cardNumber: '4242 •••• •••• 4242',
+    cardExp: '12/28',
+    cardCvc: '888'
   });
 
   if (items.length === 0) {

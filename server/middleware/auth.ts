@@ -1,39 +1,88 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, findUserById } from '../store';
+import jwt from 'jsonwebtoken';
+import { store } from '../data/store.js';
+import { UserRole } from '../data/types.js';
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: string;
+    email: string;
+    role: UserRole;
+    name: string;
+  };
 }
 
-export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+const JWT_SECRET = process.env.JWT_SECRET || 'shopstack_super_secret_jwt_key_2026';
+
+export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication required. No token provided.' });
+  }
+
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      email: string;
+      role: UserRole;
+      name: string;
+    };
+
+    // Verify user still exists and is active in store
+    const user = store.findUserById(decoded.id);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'User account is invalid or deactivated.' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    req.user = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name
+    };
 
-    if (!decoded) {
-      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
-    }
-
-    const user = await findUserById(decoded.id);
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'User account not found' });
-    }
-
-    req.user = user;
     next();
-  } catch (error: any) {
-    return res.status(401).json({ success: false, message: 'Unauthorized', error: error.message });
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid or expired token.' });
   }
 }
 
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction) {
   if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Forbidden: Admin access required' });
+    return res.status(403).json({ message: 'Access denied: Admin privileges required.' });
   }
+  next();
+}
+
+export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as {
+      id: string;
+      email: string;
+      role: UserRole;
+      name: string;
+    };
+    const user = store.findUserById(decoded.id);
+    if (user && user.isActive) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name
+      };
+    }
+  } catch (err) {
+    // Ignore invalid token for optional auth
+  }
+
   next();
 }

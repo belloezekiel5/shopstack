@@ -1,50 +1,33 @@
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
-import dotenv from 'dotenv';
-import { createServer as createViteServer } from 'vite';
-import { connectDB } from './server/db';
-import { initStore } from './server/store';
-import authRoutes from './server/routes/auth';
-import productRoutes from './server/routes/products';
-import orderRoutes from './server/routes/orders';
-import userRoutes from './server/routes/users';
-import statsRoutes from './server/routes/stats';
+import { fileURLToPath } from 'url';
+import apiRouter from './server/routes/api.js';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Basic Middlewares
-  app.use(cors());
-  app.use(express.json());
+  // Middleware
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
-  // Connect to Database
-  await connectDB();
-  await initStore();
+  // API Router FIRST
+  app.use('/api', apiRouter);
 
-  // API Routes
+  // Health check endpoint
   app.get('/api/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      service: 'ShopStack Backend API',
-      timestamp: new Date().toISOString()
-    });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  app.use('/api/auth', authRoutes);
-  app.use('/api/products', productRoutes);
-  app.use('/api/orders', orderRoutes);
-  app.use('/api/users', userRoutes);
-  app.use('/api/stats', statsRoutes);
-
-  // Vite middleware for development vs Static file serving for production
+  // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'spa'
+      appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
@@ -56,13 +39,11 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n==================================================`);
-    console.log(`🚀 ShopStack Server running on http://0.0.0.0:${PORT}`);
-    console.log(`📦 Database: ${process.env.MONGODB_URI ? 'Configured in .env' : 'Running in Local Mode (configure MONGODB_URI in .env)'}`);
-    console.log(`==================================================\n`);
+    console.log(`ShopStack server running on http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer().catch((err) => {
   console.error('Failed to start server:', err);
+  process.exit(1);
 });
