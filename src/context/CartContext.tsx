@@ -28,7 +28,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((p: any) => ({ ...p, id: p.id || p._id }))
+        .filter((p: any) => p && typeof p.id === 'string' && p.id.trim().length > 0);
     } catch {
       return [];
     }
@@ -55,49 +60,61 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [promoCode]);
 
   const addToCart = (product: Product, quantity = 1) => {
+    const prodId = product.id || (product as any)._id;
+    if (!prodId) return;
+    const effectivePrice = product.discountPrice ?? product.price;
+
     setItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
-      const effectivePrice = product.discountPrice ?? product.price;
+      const existing = prev.find((item) => item.id === prodId || (item as any)._id === prodId);
 
       if (existing) {
         const nextQty = Math.min(product.stock, existing.quantity + quantity);
-        success(`Updated quantity for "${product.name}" (${nextQty} in cart)`);
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: nextQty } : item
+          item.id === prodId || (item as any)._id === prodId
+            ? { ...item, quantity: nextQty }
+            : item
         );
       } else {
-        success(`Added "${product.name}" to cart!`);
         return [
           ...prev,
           {
-            id: product.id,
+            id: prodId,
             name: product.name,
             brand: product.brand,
             category: product.category,
             price: effectivePrice,
             originalPrice: product.price,
-            image: product.images[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200',
+            image: (product.images && product.images[0]) || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200',
             quantity: Math.min(product.stock, quantity),
             stock: product.stock
           }
         ];
       }
     });
+
+    // Fire single success toast notification outside state setter
+    success(`Added "${product.name}" to cart!`);
   };
 
   const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== productId));
+    if (!productId) return;
+    setItems((prev) =>
+      prev.filter((item) => item.id !== productId && (item as any)._id !== productId)
+    );
     info('Item removed from cart.');
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
+    if (!productId) return;
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
     }
     setItems((prev) =>
       prev.map((item) =>
-        item.id === productId ? { ...item, quantity: Math.min(item.stock, quantity) } : item
+        item.id === productId || (item as any)._id === productId
+          ? { ...item, quantity: Math.min(item.stock, quantity) }
+          : item
       )
     );
   };

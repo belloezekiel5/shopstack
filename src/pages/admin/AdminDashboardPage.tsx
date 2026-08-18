@@ -7,7 +7,10 @@ import {
   Users,
   AlertTriangle,
   TrendingUp,
-  ChevronRight
+  ChevronRight,
+  Database,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { AdminStats, Order, OrderStatus, Product } from '../../types';
@@ -20,6 +23,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; configured: boolean }>({ connected: false, configured: false });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const loadDashboardData = async () => {
@@ -34,6 +38,12 @@ export const AdminDashboardPage: React.FC = () => {
       setStats(statsRes);
       setRecentOrders(ordersRes.orders);
       setLowStockProducts(productsRes.products.filter((p) => p.stock <= 5));
+
+      // Fetch DB status
+      fetch('/api/stats/db-status')
+        .then((r) => r.json())
+        .then((d) => setDbStatus(d))
+        .catch(() => {});
     } catch (err: any) {
       error(err.message || 'Failed to load admin stats.');
     } finally {
@@ -73,7 +83,24 @@ export const AdminDashboardPage: React.FC = () => {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#1A1A1A] tracking-tight">Admin Overview</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#1A1A1A] tracking-tight">Admin Overview</h1>
+            <div
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                dbStatus.connected
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-200'
+              }`}
+              title={
+                dbStatus.connected
+                  ? 'Connected to Live MongoDB Database'
+                  : 'Add MONGODB_URI to .env to connect to your live database'
+              }
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>{dbStatus.connected ? 'MongoDB Connected' : 'Database Ready (Configure in .env)'}</span>
+            </div>
+          </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Real-time analytics, revenue tracking, and inventory control.
           </p>

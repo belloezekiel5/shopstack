@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info';
@@ -22,6 +22,7 @@ const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const lastToastTimeRef = useRef<{ [msg: string]: number }>({});
 
   const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -29,11 +30,22 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const addToast = useCallback(
     (message: string, type: ToastType = 'info') => {
-      const id = `toast_${Date.now()}_${Math.random()}`;
-      setToasts((prev) => [...prev, { id, message, type }]);
+      if (!message) return;
+      const now = Date.now();
+      const lastTime = lastToastTimeRef.current[message] || 0;
+
+      // Debounce identical toast messages within 800ms
+      if (now - lastTime < 800) {
+        return;
+      }
+      lastToastTimeRef.current[message] = now;
+
+      const id = `toast_${now}_${Math.random().toString(36).substring(2, 7)}`;
+      setToasts((prev) => [...prev.slice(-3), { id, message, type }]);
+
       setTimeout(() => {
         removeToast(id);
-      }, 4000);
+      }, 3500);
     },
     [removeToast]
   );
@@ -72,7 +84,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             </div>
             <button
               onClick={() => removeToast(toast.id)}
-              className="text-zinc-400 hover:text-white p-1 rounded-lg transition-colors"
+              className="text-zinc-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
             >
               <X className="w-3.5 h-3.5" />
             </button>

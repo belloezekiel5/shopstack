@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { Lock, Mail, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/common/Button';
@@ -36,20 +36,6 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleQuickLogin = async (role: 'customer' | 'admin') => {
-    try {
-      setIsLoading(true);
-      const demoEmail = role === 'admin' ? 'admin@shopstack.com' : 'customer@shopstack.com';
-      await login(demoEmail, 'password123');
-      success(`Logged in as Demo ${role === 'admin' ? 'Administrator' : 'Customer'}!`);
-      navigate(role === 'admin' ? '/admin' : from, { replace: true });
-    } catch (err: any) {
-      error('Failed demo login');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#F9F9F9]">
       <div className="w-full max-w-md bg-white rounded-3xl border border-gray-100 p-8 shadow-xs space-y-6">
@@ -62,39 +48,6 @@ export const LoginPage: React.FC = () => {
           </Link>
           <h2 className="text-lg font-bold text-[#1A1A1A]">Welcome Back</h2>
           <p className="text-xs text-gray-400">Sign in to manage orders, wishlist, and profile.</p>
-        </div>
-
-        {/* Demo Fast Login Buttons */}
-        <div className="space-y-2 pt-2">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 text-center">
-            One-Click Demo Access
-          </span>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('customer')}
-              className="py-2.5 px-3 rounded-xl bg-gray-50 border border-gray-200 text-xs font-bold text-gray-800 hover:bg-[#FAF92A] hover:border-[#FDBF2D] hover:text-[#1A1A1A] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <UserIcon className="w-3.5 h-3.5" />
-              <span>Customer Demo</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className="py-2.5 px-3 rounded-xl bg-gray-50 border border-gray-200 text-xs font-bold text-gray-800 hover:bg-[#FAF92A] hover:border-[#FDBF2D] hover:text-[#1A1A1A] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Admin Demo</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-gray-100 w-full" />
-          <span className="bg-white px-3 text-[11px] text-gray-400 uppercase font-bold absolute">
-            or with email
-          </span>
         </div>
 
         {/* Form */}
