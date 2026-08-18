@@ -41,8 +41,8 @@ export const Navbar: React.FC = () => {
             </span>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium text-gray-500">
+          {/* Desktop Navigation Links (Visible only on lg screens) */}
+          <div className="hidden lg:flex items-center gap-6 text-sm font-medium text-gray-500">
             {navLinks.map((link) => {
               const isActive =
                 link.path === '/'
@@ -64,7 +64,7 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Right: Search, Wishlist, Cart & Account Button */}
-        <div className="flex items-center gap-4 sm:gap-5">
+        <div className="flex items-center gap-3 sm:gap-4">
           {/* Search Input Bar */}
           <form onSubmit={handleSearch} className="hidden sm:block relative">
             <input
@@ -72,7 +72,7 @@ export const Navbar: React.FC = () => {
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-gray-50 border border-gray-200 rounded-full py-2 pl-4 pr-9 text-xs w-48 lg:w-64 focus:outline-none focus:border-[#FDBF2D] text-[#1A1A1A] placeholder-gray-400 transition-all"
+              className="bg-gray-50 border border-gray-200 rounded-full py-2 pl-4 pr-9 text-xs w-40 md:w-48 lg:w-64 focus:outline-none focus:border-[#FDBF2D] text-[#1A1A1A] placeholder-gray-400 transition-all"
             />
             <button
               type="submit"
@@ -151,20 +151,22 @@ export const Navbar: React.FC = () => {
             </Link>
           )}
 
-          {/* Mobile menu toggle */}
+          {/* Tablet & Mobile menu toggle */}
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-gray-700 hover:text-[#1A1A1A]"
+            className="lg:hidden p-2 text-gray-700 hover:text-[#1A1A1A] rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+            aria-label="Toggle Navigation Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* Mobile & Tablet Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-6 py-4 space-y-4">
-          <form onSubmit={handleSearch} className="relative">
+        <div className="lg:hidden border-t border-gray-100 bg-white px-6 py-5 space-y-4 shadow-sm animate-in slide-in-from-top-2 duration-150">
+          <form onSubmit={handleSearch} className="sm:hidden relative">
             <input
               type="text"
               placeholder="Search catalog..."
@@ -176,21 +178,31 @@ export const Navbar: React.FC = () => {
           </form>
 
           <div className="flex flex-col space-y-2 text-sm font-medium text-gray-600">
-            {navLinks.map((link) => (
-              <Link
-                key={link.label}
-                to={link.path}
-                onClick={() => setMobileMenuOpen(false)}
-                className="py-1.5 hover:text-[#1A1A1A]"
-              >
-                {link.label}
-              </Link>
-            ))}
+            {navLinks.map((link) => {
+              const isActive =
+                link.path === '/'
+                  ? location.pathname === '/'
+                  : location.pathname.startsWith(link.path.split('?')[0]);
+              return (
+                <Link
+                  key={link.label}
+                  to={link.path}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`py-2 px-3 rounded-lg transition-colors flex items-center justify-between ${
+                    isActive
+                      ? 'bg-gray-100 text-[#1A1A1A] font-semibold'
+                      : 'hover:bg-gray-50 hover:text-[#1A1A1A]'
+                  }`}
+                >
+                  <span>{link.label}</span>
+                </Link>
+              );
+            })}
             {isAdmin && (
               <Link
                 to="/admin"
                 onClick={() => setMobileMenuOpen(false)}
-                className="py-1.5 font-bold text-amber-600 flex items-center gap-1.5"
+                className="py-2 px-3 rounded-lg font-bold text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition-colors"
               >
                 <Shield className="w-4 h-4" />
                 <span>Admin Console</span>
