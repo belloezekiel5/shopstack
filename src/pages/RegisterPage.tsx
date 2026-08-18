@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Lock, Mail, User, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, User, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Button } from '../components/common/Button';
+import { ShopStackLogo } from '../components/common/ShopStackLogo';
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -43,14 +44,14 @@ export const RegisterPage: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center p-4 bg-[#F9F9F9]">
       <div className="w-full max-w-md bg-white rounded-3xl border border-gray-100 p-8 shadow-xs space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <Link to="/" className="inline-block">
-            <span className="text-2xl font-bold tracking-tight text-[#1A1A1A]">
-              Shop<span className="text-[#FDBF2D]">Stack</span>
-            </span>
+        <div className="text-center space-y-3 flex flex-col items-center">
+          <Link to="/" className="inline-block group">
+            <ShopStackLogo size="lg" />
           </Link>
-          <h2 className="text-lg font-bold text-[#1A1A1A]">Create your account</h2>
-          <p className="text-xs text-gray-400">Join ShopStack for fast checkout & exclusive deals.</p>
+          <div>
+            <h2 className="text-lg font-bold text-[#1A1A1A]">Create your account</h2>
+            <p className="text-xs text-gray-400">Join ShopStack for fast checkout & exclusive deals.</p>
+          </div>
         </div>
 
         {/* Form */}

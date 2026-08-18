@@ -449,7 +449,6 @@ class InMemoryStore {
             quantity: 1
           },
           {
-            id: 'ord_item_02',
             productId: 'prod_acc_02',
             name: 'RFID-Shielded Slim Bifold Cardholder',
             image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=800&auto=format&fit=crop&q=80',

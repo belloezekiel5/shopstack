@@ -6,10 +6,10 @@ import {
   ShoppingBag,
   Users,
   LogOut,
-  ExternalLink,
-  Layers
+  ExternalLink
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { ShopStackLogo } from '../../components/common/ShopStackLogo';
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
@@ -28,10 +28,8 @@ export const AdminLayout: React.FC = () => {
       <aside className="w-full md:w-64 bg-[#1A1A1A] text-white flex flex-col shrink-0 border-r border-zinc-800">
         {/* Brand Header */}
         <div className="p-6 border-b border-zinc-800 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <span className="text-xl font-bold tracking-tight text-white">
-              Shop<span className="text-[#FDBF2D]">Stack</span>
-            </span>
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <ShopStackLogo size="sm" variant="light" />
           </Link>
           <span className="bg-[#FAF92A] text-[#1A1A1A] text-[10px] font-bold px-2 py-0.5 rounded-full border border-[#FDBF2D]">
             ADMIN
