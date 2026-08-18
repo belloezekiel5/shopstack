@@ -1,8 +1,8 @@
 import { Response } from 'express';
-import { store } from '../data/store.js';
+import { dbRepository } from '../repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-export function addReview(req: AuthRequest, res: Response) {
+export async function addReview(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Please log in to leave a review.' });
@@ -19,8 +19,8 @@ export function addReview(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: 'Please provide a helpful review comment.' });
     }
 
-    const user = store.findUserById(req.user.id);
-    const review = store.addReviewToProduct(productId, {
+    const user = await dbRepository.findUserById(req.user.id);
+    const review = await dbRepository.addReviewToProduct(productId, {
       userId: req.user.id,
       userName: req.user.name,
       userAvatar: user?.avatar,
@@ -32,7 +32,7 @@ export function addReview(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
-    const updatedProduct = store.findProductById(productId);
+    const updatedProduct = await dbRepository.findProductById(productId);
 
     return res.status(201).json({
       review,

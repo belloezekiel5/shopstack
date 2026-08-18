@@ -1,8 +1,8 @@
 import { Response } from 'express';
-import { store } from '../data/store.js';
+import { dbRepository } from '../repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-export function createOrder(req: AuthRequest, res: Response) {
+export async function createOrder(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required to place an order.' });
@@ -23,7 +23,7 @@ export function createOrder(req: AuthRequest, res: Response) {
     let calculatedSubtotal = 0;
 
     for (const item of items) {
-      const product = store.findProductById(item.productId);
+      const product = await dbRepository.findProductById(item.productId);
       if (!product) {
         return res.status(400).json({ message: `Product ${item.name || item.productId} no longer exists.` });
       }
@@ -50,7 +50,7 @@ export function createOrder(req: AuthRequest, res: Response) {
     const discountAmount = Math.min(Number(discount) || 0, calculatedSubtotal);
     const finalTotal = Number((calculatedSubtotal + shippingCost - discountAmount).toFixed(2));
 
-    const newOrder = store.createOrder({
+    const newOrder = await dbRepository.createOrder({
       userId: req.user.id,
       customerName: req.user.name,
       customerEmail: req.user.email,
@@ -85,13 +85,13 @@ export function createOrder(req: AuthRequest, res: Response) {
   }
 }
 
-export function getMyOrders(req: AuthRequest, res: Response) {
+export async function getMyOrders(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const orders = store.findOrdersByUserId(req.user.id);
+    const orders = await dbRepository.findOrdersByUserId(req.user.id);
     return res.json({ orders });
   } catch (error) {
     console.error('getMyOrders error:', error);
@@ -99,14 +99,14 @@ export function getMyOrders(req: AuthRequest, res: Response) {
   }
 }
 
-export function getOrderById(req: AuthRequest, res: Response) {
+export async function getOrderById(req: AuthRequest, res: Response) {
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
     const { id } = req.params;
-    const order = store.findOrderById(id);
+    const order = await dbRepository.findOrderById(id);
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found.' });
@@ -124,10 +124,11 @@ export function getOrderById(req: AuthRequest, res: Response) {
   }
 }
 
-export function getAllOrdersAdmin(req: AuthRequest, res: Response) {
+export async function getAllOrdersAdmin(req: AuthRequest, res: Response) {
   try {
     const { status, paymentStatus, search } = req.query;
-    let orders = [...store.getAllOrders()];
+    const allOrders = await dbRepository.getAllOrders();
+    let orders = [...allOrders];
 
     if (status && status !== 'all') {
       orders = orders.filter(o => o.orderStatus === status);
@@ -156,12 +157,12 @@ export function getAllOrdersAdmin(req: AuthRequest, res: Response) {
   }
 }
 
-export function updateOrderStatusAdmin(req: AuthRequest, res: Response) {
+export async function updateOrderStatusAdmin(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const { orderStatus, paymentStatus } = req.body;
 
-    const updated = store.updateOrderStatus(id, orderStatus, paymentStatus);
+    const updated = await dbRepository.updateOrderStatus(id, orderStatus, paymentStatus);
     if (!updated) {
       return res.status(404).json({ message: 'Order not found.' });
     }

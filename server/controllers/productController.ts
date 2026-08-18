@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
-import { store } from '../data/store.js';
+import { dbRepository } from '../repository.js';
 import { ProductDoc } from '../data/types.js';
 
-export function getProducts(req: Request, res: Response) {
+export async function getProducts(req: Request, res: Response) {
   try {
     const {
       q,
@@ -18,7 +18,8 @@ export function getProducts(req: Request, res: Response) {
       limit = '12'
     } = req.query;
 
-    let items: ProductDoc[] = [...store.getAllProducts()];
+    const allProducts = await dbRepository.getAllProducts();
+    let items: ProductDoc[] = [...allProducts];
 
     // Text search in name, description, brand, or category
     if (q && typeof q === 'string' && q.trim()) {
@@ -117,18 +118,18 @@ export function getProducts(req: Request, res: Response) {
   }
 }
 
-export function getProductById(req: Request, res: Response) {
+export async function getProductById(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const product = store.findProductById(id);
+    const product = await dbRepository.findProductById(id);
 
     if (!product) {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
     // Also get related products from same category
-    const related = store
-      .getAllProducts()
+    const allProducts = await dbRepository.getAllProducts();
+    const related = allProducts
       .filter(p => p.category === product.category && p.id !== product.id)
       .slice(0, 4);
 
@@ -139,9 +140,9 @@ export function getProductById(req: Request, res: Response) {
   }
 }
 
-export function getCategories(req: Request, res: Response) {
+export async function getCategories(req: Request, res: Response) {
   try {
-    const products = store.getAllProducts();
+    const products = await dbRepository.getAllProducts();
     const categoryMap: Record<string, number> = {};
 
     for (const prod of products) {
@@ -160,7 +161,7 @@ export function getCategories(req: Request, res: Response) {
   }
 }
 
-export function createProduct(req: Request, res: Response) {
+export async function createProduct(req: Request, res: Response) {
   try {
     const {
       name,
@@ -184,7 +185,7 @@ export function createProduct(req: Request, res: Response) {
       ? images
       : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80'];
 
-    const newProduct = store.createProduct({
+    const newProduct = await dbRepository.createProduct({
       name: name.trim(),
       description: description.trim(),
       price: Number(price),
@@ -205,7 +206,7 @@ export function createProduct(req: Request, res: Response) {
   }
 }
 
-export function updateProduct(req: Request, res: Response) {
+export async function updateProduct(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -214,7 +215,7 @@ export function updateProduct(req: Request, res: Response) {
     if (updates.discountPrice !== undefined) updates.discountPrice = updates.discountPrice ? Number(updates.discountPrice) : undefined;
     if (updates.stock !== undefined) updates.stock = Number(updates.stock);
 
-    const updated = store.updateProduct(id, updates);
+    const updated = await dbRepository.updateProduct(id, updates);
     if (!updated) {
       return res.status(404).json({ message: 'Product not found.' });
     }
@@ -226,10 +227,10 @@ export function updateProduct(req: Request, res: Response) {
   }
 }
 
-export function deleteProduct(req: Request, res: Response) {
+export async function deleteProduct(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const deleted = store.deleteProduct(id);
+    const deleted = await dbRepository.deleteProduct(id);
 
     if (!deleted) {
       return res.status(404).json({ message: 'Product not found.' });

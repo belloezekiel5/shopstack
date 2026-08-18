@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { store } from '../data/store.js';
+import { dbRepository } from '../repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shopstack_super_secret_jwt_key_2026';
@@ -31,7 +31,7 @@ export async function register(req: Request, res: Response) {
       return res.status(400).json({ message: 'Password must be at least 6 characters.' });
     }
 
-    const existingUser = store.findUserByEmail(email);
+    const existingUser = await dbRepository.findUserByEmail(email);
     if (existingUser) {
       return res.status(400).json({ message: 'An account with this email already exists.' });
     }
@@ -39,7 +39,7 @@ export async function register(req: Request, res: Response) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = store.createUser({
+    const newUser = await dbRepository.createUser({
       name: name.trim(),
       email: email.trim().toLowerCase(),
       password: hashedPassword,
@@ -68,7 +68,7 @@ export async function login(req: Request, res: Response) {
       return res.status(400).json({ message: 'Please provide both email and password.' });
     }
 
-    const user = store.findUserByEmail(email);
+    const user = await dbRepository.findUserByEmail(email);
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
@@ -77,7 +77,7 @@ export async function login(req: Request, res: Response) {
       return res.status(403).json({ message: 'Your account has been deactivated. Please contact support.' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password || '');
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
@@ -100,7 +100,7 @@ export async function getMe(req: AuthRequest, res: Response) {
       return res.status(401).json({ message: 'Not authenticated.' });
     }
 
-    const user = store.findUserById(req.user.id);
+    const user = await dbRepository.findUserById(req.user.id);
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
@@ -131,7 +131,7 @@ export async function updateProfile(req: AuthRequest, res: Response) {
       updates.password = await bcrypt.hash(password.trim(), salt);
     }
 
-    const updatedUser = store.updateUser(req.user.id, updates);
+    const updatedUser = await dbRepository.updateUser(req.user.id, updates);
     if (!updatedUser) {
       return res.status(404).json({ message: 'User not found.' });
     }

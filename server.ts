@@ -2,6 +2,8 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import apiRouter from './server/routes/api.js';
+import { connectMongoDB, getDatabaseStatus } from './server/db.js';
+import { seedMongoIfEmpty } from './server/repository.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +12,16 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  // Initialize MongoDB connection if MONGODB_URI is provided
+  try {
+    const mongoConnected = await connectMongoDB();
+    if (mongoConnected) {
+      await seedMongoIfEmpty();
+    }
+  } catch (dbErr) {
+    console.error('[Startup] MongoDB initialization notice:', dbErr);
+  }
+
   // Middleware
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
@@ -17,9 +29,13 @@ async function startServer() {
   // API Router FIRST
   app.use('/api', apiRouter);
 
-  // Health check endpoint
+  // Health and Database status endpoint
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      database: getDatabaseStatus(),
+      timestamp: new Date().toISOString()
+    });
   });
 
   // Vite middleware for development

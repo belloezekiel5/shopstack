@@ -5,8 +5,14 @@ import * as productController from '../controllers/productController.js';
 import * as orderController from '../controllers/orderController.js';
 import * as reviewController from '../controllers/reviewController.js';
 import * as userController from '../controllers/userController.js';
+import { getDatabaseStatus } from '../db.js';
 
 const router = Router();
+
+// System / Database status route
+router.get('/status', (req, res) => {
+  res.json({ database: getDatabaseStatus() });
+});
 
 // Auth Routes
 router.post('/auth/register', authController.register);

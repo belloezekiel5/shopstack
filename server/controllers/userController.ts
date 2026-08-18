@@ -1,28 +1,31 @@
 import { Response } from 'express';
-import { store } from '../data/store.js';
+import { dbRepository } from '../repository.js';
 import { AuthRequest } from '../middleware/auth.js';
 
-export function getAllUsersAdmin(req: AuthRequest, res: Response) {
+export async function getAllUsersAdmin(req: AuthRequest, res: Response) {
   try {
-    const users = store.getAllUsers().map(u => {
-      const { password, ...safeUser } = u;
-      const userOrders = store.findOrdersByUserId(u.id);
-      const totalSpent = userOrders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' ? o.total : 0), 0);
-      return {
-        ...safeUser,
-        orderCount: userOrders.length,
-        totalSpent: Number(totalSpent.toFixed(2))
-      };
-    });
+    const users = await dbRepository.getAllUsers();
+    const safeUsers = await Promise.all(
+      users.map(async (u) => {
+        const { password, ...safeUser } = u;
+        const userOrders = await dbRepository.findOrdersByUserId(u.id);
+        const totalSpent = userOrders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' ? o.total : 0), 0);
+        return {
+          ...safeUser,
+          orderCount: userOrders.length,
+          totalSpent: Number(totalSpent.toFixed(2))
+        };
+      })
+    );
 
-    return res.json({ users });
+    return res.json({ users: safeUsers });
   } catch (error) {
     console.error('getAllUsersAdmin error:', error);
     return res.status(500).json({ message: 'Error retrieving users.' });
   }
 }
 
-export function updateUserRoleAdmin(req: AuthRequest, res: Response) {
+export async function updateUserRoleAdmin(req: AuthRequest, res: Response) {
   try {
     const { id } = req.params;
     const { role, isActive } = req.body;
@@ -35,7 +38,7 @@ export function updateUserRoleAdmin(req: AuthRequest, res: Response) {
       updates.isActive = Boolean(isActive);
     }
 
-    const updated = store.updateUser(id, updates);
+    const updated = await dbRepository.updateUser(id, updates);
     if (!updated) {
       return res.status(404).json({ message: 'User not found.' });
     }
@@ -48,11 +51,11 @@ export function updateUserRoleAdmin(req: AuthRequest, res: Response) {
   }
 }
 
-export function getAdminStats(req: AuthRequest, res: Response) {
+export async function getAdminStats(req: AuthRequest, res: Response) {
   try {
-    const products = store.getAllProducts();
-    const orders = store.getAllOrders();
-    const users = store.getAllUsers();
+    const products = await dbRepository.getAllProducts();
+    const orders = await dbRepository.getAllOrders();
+    const users = await dbRepository.getAllUsers();
 
     // Total sales from paid orders
     const totalSales = orders

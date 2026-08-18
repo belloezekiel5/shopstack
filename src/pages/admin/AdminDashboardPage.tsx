@@ -7,7 +7,9 @@ import {
   Users,
   AlertTriangle,
   TrendingUp,
-  ChevronRight
+  Database,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { AdminStats, Order, OrderStatus, Product } from '../../types';
@@ -20,20 +22,23 @@ export const AdminDashboardPage: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [lowStockProducts, setLowStockProducts] = useState<Product[]>([]);
+  const [dbStatus, setDbStatus] = useState<{ isConfigured: boolean; status: string; host: string | null; name: string | null } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
-      const [statsRes, ordersRes, productsRes] = await Promise.all([
+      const [statsRes, ordersRes, productsRes, dbRes] = await Promise.all([
         api.getAdminStats(),
         api.getAdminOrders({ limit: 6 }),
-        api.getAdminProducts({ limit: 50 })
+        api.getAdminProducts({ limit: 50 }),
+        api.getDatabaseStatus()
       ]);
 
       setStats(statsRes);
       setRecentOrders(ordersRes.orders);
       setLowStockProducts(productsRes.products.filter((p) => p.stock <= 5));
+      setDbStatus(dbRes.database);
     } catch (err: any) {
       error(err.message || 'Failed to load admin stats.');
     } finally {
@@ -85,6 +90,34 @@ export const AdminDashboardPage: React.FC = () => {
               Manage Products
             </Button>
           </Link>
+        </div>
+      </div>
+
+      {/* Database Connection Status Card */}
+      <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${dbStatus?.status === 'connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-[#1A1A1A]">MongoDB Database Engine</span>
+              {dbStatus?.status === 'connected' ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                  <CheckCircle2 className="w-3 h-3" /> Live & Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                  <AlertCircle className="w-3 h-3" /> Local Persistence Active
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {dbStatus?.status === 'connected'
+                ? `Connected to host: ${dbStatus.host} (${dbStatus.name || 'shopstack'})`
+                : 'Provide MONGODB_URI in Settings to automatically sync directly with MongoDB Atlas.'}
+            </p>
+          </div>
         </div>
       </div>
 
