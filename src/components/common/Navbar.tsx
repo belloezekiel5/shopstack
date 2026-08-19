@@ -149,11 +149,11 @@ export const Navbar: React.FC = () => {
             </Link>
           )}
 
-          {/* Account Pill Button */}
+          {/* Account Pill Button (hidden on mobile/tablet, shown on desktop lg+) */}
           {user ? (
             <Link
               to="/dashboard"
-              className="text-xs sm:text-sm font-medium bg-[#1A1A1A] text-white px-3.5 sm:px-5 py-2 rounded-full hover:bg-black transition-colors flex items-center gap-1.5"
+              className="hidden lg:flex text-xs sm:text-sm font-medium bg-[#1A1A1A] text-white px-3.5 sm:px-5 py-2 rounded-full hover:bg-black transition-colors items-center gap-1.5"
             >
               <UserIcon className="w-3.5 h-3.5" />
               <span className="truncate max-w-[80px] sm:max-w-[100px]">{user.name.split(' ')[0]}</span>
@@ -161,7 +161,7 @@ export const Navbar: React.FC = () => {
           ) : (
             <Link
               to="/login"
-              className="text-xs sm:text-sm font-medium bg-[#1A1A1A] text-white px-3.5 sm:px-5 py-2 rounded-full hover:bg-black transition-colors"
+              className="hidden lg:inline-flex text-xs sm:text-sm font-medium bg-[#1A1A1A] text-white px-3.5 sm:px-5 py-2 rounded-full hover:bg-black transition-colors"
             >
               Sign In
             </Link>

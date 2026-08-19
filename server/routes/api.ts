@@ -1,17 +1,23 @@
 import { Router } from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { getDatabaseStatus } from '../db.js';
+
 import * as authController from '../controllers/authController.js';
 import * as productController from '../controllers/productController.js';
 import * as orderController from '../controllers/orderController.js';
 import * as reviewController from '../controllers/reviewController.js';
 import * as userController from '../controllers/userController.js';
-import { getDatabaseStatus } from '../db.js';
+
 
 const router = Router();
 
-// System / Database status route
-router.get('/status', (req, res) => {
-  res.json({ database: getDatabaseStatus() });
+router.get('/db-status', (_req, res) => {
+  const db = getDatabaseStatus();
+
+  res.json({
+    success: db.status === 'connected',
+    database: db,
+  });
 });
 
 // Auth Routes
