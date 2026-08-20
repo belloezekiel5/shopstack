@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { store } from '../data/store.js';
+import { UserModel } from '../models/User.js';
 import { UserRole } from '../data/types.js';
+import { JWT_SECRET } from '../config/env.js';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -12,40 +13,54 @@ export interface AuthRequest extends Request {
   };
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'shopstack_super_secret_jwt_key_2026';
 
-export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
+
+export async function authenticateToken(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Authentication required. No token provided.' });
+    return res.status(401).json({
+      message: 'Authentication required. No token provided.',
+    });
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as {
       id: string;
       email: string;
       role: UserRole;
       name: string;
     };
 
-    // Verify user still exists and is active in store
-    const user = store.findUserById(decoded.id);
+    const user = await UserModel.findOne({
+      id: decoded.id,
+    });
+
     if (!user || !user.isActive) {
-      return res.status(401).json({ message: 'User account is invalid or deactivated.' });
+      return res.status(401).json({
+        message: 'User account is invalid or deactivated.',
+      });
     }
 
     req.user = {
       id: user.id,
       email: user.email,
       role: user.role,
-      name: user.name
+      name: user.name,
     };
 
     next();
   } catch (err) {
-    return res.status(403).json({ message: 'Invalid or expired token.' });
+    console.error('Authentication error:', err);
+
+    return res.status(403).json({
+      message: 'Invalid or expired token.',
+    });
   }
 }
 
@@ -56,7 +71,7 @@ export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction
   next();
 }
 
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction) {
+export async function optionalAuth(req: AuthRequest, res: Response, next: NextFunction ) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -65,13 +80,13 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as {
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as {
       id: string;
       email: string;
       role: UserRole;
       name: string;
     };
-    const user = store.findUserById(decoded.id);
+    const user = await UserModel.findOne({ id: decoded.id });
     if (user && user.isActive) {
       req.user = {
         id: user.id,

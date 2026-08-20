@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import { dbRepository } from '../repository.js';
-import { ProductDoc } from '../data/types.js';
+import { ProductModel } from '../models/Product.js';
 
 export async function getProducts(req: Request, res: Response) {
   try {
@@ -18,93 +17,139 @@ export async function getProducts(req: Request, res: Response) {
       limit = '12'
     } = req.query;
 
-    const allProducts = await dbRepository.getAllProducts();
-    let items: ProductDoc[] = [...allProducts];
+    const filter: any = {};
 
-    // Text search in name, description, brand, or category
+    // Text search
     if (q && typeof q === 'string' && q.trim()) {
-      const searchTerm = q.trim().toLowerCase();
-      items = items.filter(p =>
-        p.name.toLowerCase().includes(searchTerm) ||
-        p.description.toLowerCase().includes(searchTerm) ||
-        p.category.toLowerCase().includes(searchTerm) ||
-        p.brand.toLowerCase().includes(searchTerm)
-      );
+      const searchTerm = q.trim();
+      filter.$or = [
+        { name: { $regex: searchTerm, $options: 'i' } },
+        { description: { $regex: searchTerm, $options: 'i' } },
+        { category: { $regex: searchTerm, $options: 'i' } },
+        { brand: { $regex: searchTerm, $options: 'i' } }
+      ];
     }
 
-    // Category filter
+    // Category
     if (category && typeof category === 'string' && category !== 'All') {
-      items = items.filter(p => p.category.toLowerCase() === category.toLowerCase());
+      filter.category = { $regex: `^${category}$`, $options: 'i' };
     }
 
-    // Brand filter
+    // Brand
     if (brand && typeof brand === 'string' && brand !== 'All') {
-      items = items.filter(p => p.brand.toLowerCase() === brand.toLowerCase());
+      filter.brand = { $regex: `^${brand}$`, $options: 'i' };
     }
 
-    // Price filter (effective price is discountPrice || price)
-    if (minPrice) {
-      const min = Number(minPrice);
-      if (!isNaN(min)) {
-        items = items.filter(p => (p.discountPrice ?? p.price) >= min);
-      }
-    }
+    // Price
+    if (minPrice || maxPrice) {
+      const priceConditions: any[] = [];
 
-    if (maxPrice) {
-      const max = Number(maxPrice);
-      if (!isNaN(max)) {
-        items = items.filter(p => (p.discountPrice ?? p.price) <= max);
-      }
-    }
+      if (minPrice) {
+        const min = Number(minPrice);
 
-    // Rating filter
+        if (!isNaN(min)) {
+          priceConditions.push({
+            $gte: [
+              { $ifNull: ['$discountPrice', '$price'] },
+              min
+            ]
+          });
+        }
+     }
+
+  if (maxPrice) {
+    const max = Number(maxPrice);
+
+    if (!isNaN(max)) {
+      priceConditions.push({
+        $lte: [
+          { $ifNull: ['$discountPrice', '$price'] },
+          max
+        ]
+      });
+    }
+  }
+
+  if (priceConditions.length === 1) {
+    filter.$expr = priceConditions[0];
+  } else if (priceConditions.length === 2) {
+    filter.$expr = {
+      $and: priceConditions
+    };
+  }
+}
+
+    // Rating
     if (rating) {
       const minRating = Number(rating);
+
       if (!isNaN(minRating)) {
-        items = items.filter(p => p.rating >= minRating);
+        filter.rating = { $gte: minRating };
       }
     }
 
-    // In-Stock filter
+    // Stock
     if (inStock === 'true') {
-      items = items.filter(p => p.stock > 0);
+      filter.stock = { $gt: 0 };
     }
 
-    // Featured filter
+    // Featured
     if (featured === 'true') {
-      items = items.filter(p => p.featured);
+      filter.featured = true;
     }
 
     // Sorting
+    let sortOption: any = { createdAt: -1 };
+
     switch (sort) {
       case 'price_asc':
-        items.sort((a, b) => (a.discountPrice ?? a.price) - (b.discountPrice ?? b.price));
+        sortOption = { price: 1 };
         break;
+
       case 'price_desc':
-        items.sort((a, b) => (b.discountPrice ?? b.price) - (a.discountPrice ?? a.price));
+        sortOption = { price: -1 };
         break;
+
       case 'rating':
-        items.sort((a, b) => b.rating - a.rating || b.numReviews - a.numReviews);
+        sortOption = { rating: -1, numReviews: -1 };
         break;
+
       case 'name_asc':
-        items.sort((a, b) => a.name.localeCompare(b.name));
+        sortOption = { name: 1 };
         break;
+
       case 'newest':
       default:
-        items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        sortOption = { createdAt: -1 };
         break;
     }
 
-    // Total matched count before pagination
-    const total = items.length;
-    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-    const limitNum = Math.max(1, Math.min(50, parseInt(limit as string, 10) || 12));
+    const pageNum = Math.max(
+      1,
+      parseInt(page as string, 10) || 1
+    );
+
+    const limitNum = Math.max(
+      1,
+      Math.min(50, parseInt(limit as string, 10) || 12)
+    );
+
+    const skip = (pageNum - 1) * limitNum;
+
+    const [products, total] = await Promise.all([
+      ProductModel.find(filter)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+
+      ProductModel.countDocuments(filter)
+    ]);
+
     const totalPages = Math.ceil(total / limitNum) || 1;
-    const startIndex = (pageNum - 1) * limitNum;
-    const paginatedItems = items.slice(startIndex, startIndex + limitNum);
 
     return res.json({
-      products: paginatedItems,
+      products,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -112,54 +157,87 @@ export async function getProducts(req: Request, res: Response) {
         totalPages
       }
     });
+
   } catch (error) {
     console.error('getProducts error:', error);
-    return res.status(500).json({ message: 'Error retrieving products.' });
+
+    return res.status(500).json({
+      message: 'Error retrieving products.'
+    });
   }
 }
+
 
 export async function getProductById(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const product = await dbRepository.findProductById(id);
+
+    const product = await ProductModel.findOne({ id }).lean();
 
     if (!product) {
-      return res.status(404).json({ message: 'Product not found.' });
+      return res.status(404).json({
+        message: 'Product not found.'
+      });
     }
 
-    // Also get related products from same category
-    const allProducts = await dbRepository.getAllProducts();
-    const related = allProducts
-      .filter(p => p.category === product.category && p.id !== product.id)
-      .slice(0, 4);
+    const related = await ProductModel.find({
+      category: product.category,
+      id: { $ne: product.id }
+    })
+      .limit(4)
+      .lean();
 
-    return res.json({ product, related });
+    return res.json({
+      product,
+      related
+    });
+
   } catch (error) {
     console.error('getProductById error:', error);
-    return res.status(500).json({ message: 'Error retrieving product details.' });
+
+    return res.status(500).json({
+      message: 'Error retrieving product details.'
+    });
   }
 }
 
-export async function getCategories(req: Request, res: Response) {
+
+export async function getCategories(_req: Request, res: Response) {
   try {
-    const products = await dbRepository.getAllProducts();
-    const categoryMap: Record<string, number> = {};
+    const categories = await ProductModel.aggregate([
+      {
+        $group: {
+          _id: '$category',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          count: 1
+        }
+      },
+      {
+        $sort: {
+          name: 1
+        }
+      }
+    ]);
 
-    for (const prod of products) {
-      categoryMap[prod.category] = (categoryMap[prod.category] || 0) + 1;
-    }
+    return res.json({
+      categories
+    });
 
-    const categories = Object.entries(categoryMap).map(([name, count]) => ({
-      name,
-      count
-    }));
-
-    return res.json({ categories });
   } catch (error) {
     console.error('getCategories error:', error);
-    return res.status(500).json({ message: 'Error retrieving categories.' });
+
+    return res.status(500).json({
+      message: 'Error retrieving categories.'
+    });
   }
 }
+
 
 export async function createProduct(req: Request, res: Response) {
   try {
@@ -177,68 +255,185 @@ export async function createProduct(req: Request, res: Response) {
       specifications
     } = req.body;
 
-    if (!name || !description || price === undefined || !category || !brand) {
-      return res.status(400).json({ message: 'Missing required product fields (name, description, price, category, brand).' });
+    if (
+      !name ||
+      !description ||
+      price === undefined ||
+      !category ||
+      !brand
+    ) {
+      return res.status(400).json({
+        message:
+          'Missing required product fields (name, description, price, category, brand).'
+      });
     }
 
-    const imageList = Array.isArray(images) && images.length > 0
-      ? images
-      : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80'];
+    const imageList =
+      Array.isArray(images) && images.length > 0
+        ? images
+        : [
+            'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800&auto=format&fit=crop&q=80'
+          ];
 
-    const newProduct = await dbRepository.createProduct({
+    const newProduct = await ProductModel.create({
+      id: `prod_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 7)}`,
+
       name: name.trim(),
+
       description: description.trim(),
+
       price: Number(price),
-      discountPrice: discountPrice ? Number(discountPrice) : undefined,
+
+      discountPrice:
+        discountPrice !== undefined && discountPrice !== ''
+          ? Number(discountPrice)
+          : undefined,
+
       category: category.trim(),
+
       brand: brand.trim(),
+
       images: imageList,
+
       stock: Number(stock) || 0,
+
+      rating: 5,
+
+      numReviews: 0,
+
+      reviews: [],
+
       featured: Boolean(featured),
-      sku: sku || `SKU-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+
+      sku:
+        sku ||
+        `SKU-${Math.random()
+          .toString(36)
+          .substring(2, 7)
+          .toUpperCase()}`,
+
       specifications: specifications || {}
     });
 
-    return res.status(201).json({ product: newProduct, message: 'Product created successfully.' });
-  } catch (error) {
+    return res.status(201).json({
+      product: newProduct,
+      message: 'Product created successfully.'
+    });
+
+  } catch (error: any) {
     console.error('createProduct error:', error);
-    return res.status(500).json({ message: 'Error creating product.' });
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: 'A product with this ID or SKU already exists.'
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Error creating product.'
+    });
   }
 }
+
 
 export async function updateProduct(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const updates = req.body;
 
-    if (updates.price !== undefined) updates.price = Number(updates.price);
-    if (updates.discountPrice !== undefined) updates.discountPrice = updates.discountPrice ? Number(updates.discountPrice) : undefined;
-    if (updates.stock !== undefined) updates.stock = Number(updates.stock);
+    const updates = {
+      ...req.body
+    };
 
-    const updated = await dbRepository.updateProduct(id, updates);
-    if (!updated) {
-      return res.status(404).json({ message: 'Product not found.' });
+    if (updates.price !== undefined) {
+      updates.price = Number(updates.price);
     }
 
-    return res.json({ product: updated, message: 'Product updated successfully.' });
-  } catch (error) {
+    if (updates.discountPrice !== undefined) {
+      updates.discountPrice =
+        updates.discountPrice === ''
+          ? undefined
+          : Number(updates.discountPrice);
+    }
+
+    if (updates.stock !== undefined) {
+      updates.stock = Number(updates.stock);
+    }
+
+    if (updates.name) {
+      updates.name = updates.name.trim();
+    }
+
+    if (updates.description) {
+      updates.description = updates.description.trim();
+    }
+
+    if (updates.category) {
+      updates.category = updates.category.trim();
+    }
+
+    if (updates.brand) {
+      updates.brand = updates.brand.trim();
+    }
+
+    const updated = await ProductModel.findOneAndUpdate(
+      { id },
+      updates,
+      {
+        new: true,
+        runValidators: true
+      }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({
+        message: 'Product not found.'
+      });
+    }
+
+    return res.json({
+      product: updated,
+      message: 'Product updated successfully.'
+    });
+
+  } catch (error: any) {
     console.error('updateProduct error:', error);
-    return res.status(500).json({ message: 'Error updating product.' });
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: 'A product with this SKU already exists.'
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Error updating product.'
+    });
   }
 }
+
 
 export async function deleteProduct(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const deleted = await dbRepository.deleteProduct(id);
+
+    const deleted = await ProductModel.findOneAndDelete({ id });
 
     if (!deleted) {
-      return res.status(404).json({ message: 'Product not found.' });
+      return res.status(404).json({
+        message: 'Product not found.'
+      });
     }
 
-    return res.json({ message: 'Product deleted successfully.' });
+    return res.json({
+      message: 'Product deleted successfully.'
+    });
+
   } catch (error) {
     console.error('deleteProduct error:', error);
-    return res.status(500).json({ message: 'Error deleting product.' });
+
+    return res.status(500).json({
+      message: 'Error deleting product.'
+    });
   }
 }

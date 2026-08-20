@@ -48,6 +48,9 @@ router.get('/orders/:id', authenticateToken as any, orderController.getOrderById
 router.get('/admin/orders', authenticateToken as any, requireAdmin as any, orderController.getAllOrdersAdmin as any);
 router.put('/admin/orders/:id/status', authenticateToken as any, requireAdmin as any, orderController.updateOrderStatusAdmin as any);
 router.get('/admin/users', authenticateToken as any, requireAdmin as any, userController.getAllUsersAdmin as any);
+router.post('/admin/users', authenticateToken as any, requireAdmin as any,
+  userController.createAdmin as any
+);
 router.put('/admin/users/:id', authenticateToken as any, requireAdmin as any, userController.updateUserRoleAdmin as any);
 router.get('/admin/stats', authenticateToken as any, requireAdmin as any, userController.getAdminStats as any);
 
