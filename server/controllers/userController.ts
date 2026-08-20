@@ -159,24 +159,127 @@ export async function getAdminStats(
   res: Response
 ) {
   try {
-    const totalCustomers = await UserModel.countDocuments({
-      role: 'customer',
-    });
-
-    const totalProducts = await ProductModel.countDocuments();
-
-    const totalOrders = await OrderModel.countDocuments();
-
-    console.log('STATS DEBUG:', {
+    const [
       totalCustomers,
       totalProducts,
       totalOrders,
-    });
+      salesResult,
+      orderStatusResult,
+      categorySalesResult,
+      lowStockProducts,
+      recentOrders,
+    ] = await Promise.all([
+      UserModel.countDocuments({
+        role: 'customer',
+      }),
+      ProductModel.countDocuments(),
+      OrderModel.countDocuments(),
+      OrderModel.aggregate([
+        {
+          $match: {
+            paymentStatus: 'paid',
+            orderStatus: { $ne: 'cancelled' },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalSales: { $sum: '$total' },
+          },
+        },
+      ]),
+      OrderModel.aggregate([
+        {
+          $group: {
+            _id: '$orderStatus',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      OrderModel.aggregate([
+        {
+          $match: {
+            paymentStatus: 'paid',
+            orderStatus: { $ne: 'cancelled' },
+          },
+        },
+        { $unwind: '$items' },
+        {
+          $lookup: {
+            from: 'products',
+            localField: 'items.productId',
+            foreignField: 'id',
+            as: 'product',
+          },
+        },
+        {
+          $unwind: {
+            path: '$product',
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $group: {
+            _id: '$product.category',
+            sales: {
+              $sum: { $multiply: ['$items.price', '$items.quantity'] },
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            category: '$_id',
+            sales: 1,
+          },
+        },
+        { $sort: { sales: -1 } },
+      ]),
+      ProductModel.find({
+        stock: { $lte: 5 },
+      })
+        .sort({ stock: 1 })
+        .limit(10)
+        .lean(),
+      OrderModel.find()
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .lean(),
+    ]);
+
+    const orderStatusCount: Record<string, number> = {
+      processing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
+
+    for (const item of orderStatusResult) {
+      if (item._id && item._id in orderStatusCount) {
+        orderStatusCount[item._id] = item.count;
+      }
+    }
+
+    const totalSales = salesResult[0]?.totalSales || 0;
+
+    const categorySales: Record<string, number> = {};
+    for (const item of categorySalesResult) {
+      if (item.category) {
+        categorySales[item.category] = item.sales;
+      }
+    }
 
     return res.json({
-      totalCustomers,
-      totalProducts,
-      totalOrders,
+      stats: {
+        totalSales,
+        totalOrders,
+        totalProducts,
+        totalCustomers,
+        orderStatusCount,
+        categorySales,
+        lowStockProducts,
+        recentOrders,
+      },
     });
   } catch (error) {
     console.error('getAdminStats error:', error);

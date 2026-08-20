@@ -1,4 +1,4 @@
-import { Product, Category, Order, User, AdminStats, OrderStatus, UserRole } from '../types';
+import { Product, Category, Order, User, AdminStats, OrderStatus, UserRole, CartItem } from '../types';
 
 const AUTH_TOKEN_KEY = 'shopstack_token_v1';
 const AUTH_USER_KEY = 'shopstack_current_user_v1';
@@ -33,7 +33,8 @@ export const api = {
   // Database status
   async getDatabaseStatus(): Promise<{ database: { isConfigured: boolean; status: string; host: string | null; name: string | null } }> {
     try {
-      return await apiRequest<{ database: { isConfigured: boolean; status: string; host: string | null; name: string | null } }>('/status');
+      const res = await apiRequest<{ success?: boolean; database: { isConfigured: boolean; status: string; host: string | null; name: string | null } }>('/db-status');
+      return { database: res.database };
     } catch {
       return { database: { isConfigured: false, status: 'disconnected', host: null, name: null } };
     }
@@ -77,7 +78,6 @@ export const api = {
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.user));
       return res;
     } catch {
-      // Return cached user if offline or token invalid
       const cached = localStorage.getItem(AUTH_USER_KEY);
       return { user: cached ? JSON.parse(cached) : null };
     }
@@ -94,6 +94,36 @@ export const api = {
     }
 
     return res;
+  },
+
+  // Cart API (MongoDB)
+  async getCart(): Promise<{ cart: CartItem[] }> {
+    return apiRequest<{ cart: CartItem[] }>('/cart');
+  },
+
+  async syncCart(items: CartItem[]): Promise<{ cart: CartItem[] }> {
+    return apiRequest<{ cart: CartItem[] }>('/cart/sync', {
+      method: 'POST',
+      body: JSON.stringify({ items }),
+    });
+  },
+
+  async clearCart(): Promise<{ cart: [] }> {
+    return apiRequest<{ cart: [] }>('/cart', {
+      method: 'DELETE',
+    });
+  },
+
+  // Wishlist API (MongoDB)
+  async getWishlist(): Promise<{ wishlist: string[]; products: Product[] }> {
+    return apiRequest<{ wishlist: string[]; products: Product[] }>('/wishlist');
+  },
+
+  async toggleWishlist(productId: string): Promise<{ wishlist: string[]; added: boolean }> {
+    return apiRequest<{ wishlist: string[]; added: boolean }>('/wishlist/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ productId }),
+    });
   },
 
   // Products
@@ -144,13 +174,13 @@ export const api = {
 
   // Admin API
   async getAdminStats(): Promise<AdminStats> {
-    const res = await apiRequest<{ stats: any }>('/admin/stats');
-    const statsData = res.stats || {};
+    const res = await apiRequest<any>('/admin/stats');
+    const statsData = res.stats || res;
     return {
-      totalRevenue: statsData.totalSales ?? 0,
+      totalRevenue: statsData.totalSales ?? statsData.totalRevenue ?? 0,
       totalOrders: statsData.totalOrders ?? 0,
       totalProducts: statsData.totalProducts ?? 0,
-      totalUsers: statsData.totalCustomers ?? 0,
+      totalUsers: statsData.totalCustomers ?? statsData.totalUsers ?? 0,
       recentOrdersCount: statsData.recentOrders?.length ?? 0,
       lowStockCount: statsData.lowStockProducts?.length ?? 0,
       ordersByStatus: statsData.orderStatusCount ?? { processing: 0, shipped: 0, delivered: 0, cancelled: 0 },

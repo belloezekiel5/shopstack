@@ -6,7 +6,7 @@ export async function connectMongoDB(): Promise<boolean> {
   const uri = process.env.MONGODB_URI;
 
   if (!uri) {
-    console.log('[Database] No MONGODB_URI found in environment. Running with local fallback data store.');
+    console.warn('[MongoDB] MONGODB_URI is not set in environment variables.');
     return false;
   }
 
@@ -15,18 +15,17 @@ export async function connectMongoDB(): Promise<boolean> {
   }
 
   try {
-    console.log('[Database] Connecting to MongoDB...');
+    console.log('[MongoDB] Connecting to MongoDB instance...');
     const conn = await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 5000,
       connectTimeoutMS: 10000,
     });
 
     isConnected = conn.connection.readyState === 1;
-    console.log(`[Database] Successfully connected to MongoDB: ${conn.connection.host}/${conn.connection.name}`);
+    console.log(`[MongoDB] Connected successfully: ${conn.connection.host}/${conn.connection.name}`);
     return true;
   } catch (error) {
-    console.error('[Database] Failed to connect to MongoDB:', error);
-    console.log('[Database] Operating with local store until MongoDB connection is established.');
+    console.error('[MongoDB] Connection error:', error);
     return false;
   }
 }

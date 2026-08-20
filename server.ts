@@ -1,11 +1,10 @@
 import express from 'express';
-
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import apiRouter from './server/routes/api.ts';
+import apiRouter from './server/routes/api.js';
 import { connectMongoDB } from './server/db.js';
-
+import { seedMongoIfEmpty } from './server/seed/seedData.js';
 
 dotenv.config();
 
@@ -44,7 +43,15 @@ async function startServer() {
     });
   }
 
-  await connectMongoDB();
+  // Connect to MongoDB
+  try {
+    const connected = await connectMongoDB();
+    if (connected) {
+      await seedMongoIfEmpty();
+    }
+  } catch (err) {
+    console.error('[MongoDB Startup Error]:', err);
+  }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`ShopStack server running on http://0.0.0.0:${PORT}`);

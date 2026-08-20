@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { CartItem, Product } from '../types';
 import { useToast } from './ToastContext';
+import { api } from '../services/api';
+import { useAuth } from './AuthContext';
 
 interface CartContextType {
   items: CartItem[];
@@ -24,6 +26,8 @@ const PROMO_STORAGE_KEY = 'shopstack_promo_v1';
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { success, error, info } = useToast();
+  const { user } = useAuth();
+  const isInitialLoad = useRef(true);
 
   const [items, setItems] = useState<CartItem[]>(() => {
     try {
@@ -42,9 +46,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  // When authenticated user changes, fetch remote cart from MongoDB
+  useEffect(() => {
+    let active = true;
+    if (user) {
+      api.getCart()
+        .then((res) => {
+          if (active && res.cart) {
+            // If remote has items, adopt remote; if remote empty but local has items, sync local to remote
+            if (res.cart.length > 0) {
+              setItems(res.cart);
+            } else if (items.length > 0) {
+              api.syncCart(items).catch(() => {});
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          isInitialLoad.current = false;
+        });
+    } else {
+      isInitialLoad.current = false;
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
+  // Sync to MongoDB whenever items change if user is logged in
   useEffect(() => {
     localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
+
+    if (user && !isInitialLoad.current) {
+      const timer = setTimeout(() => {
+        api.syncCart(items).catch(() => {});
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [items, user]);
 
   useEffect(() => {
     if (promoCode) {
@@ -105,6 +145,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = () => {
     setItems([]);
     setPromoCode(null);
+    if (user) {
+      api.clearCart().catch(() => {});
+    }
   };
 
   const applyPromoCode = (code: string): boolean => {
