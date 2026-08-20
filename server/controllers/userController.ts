@@ -5,11 +5,14 @@ import { UserModel } from '../models/User.js';
 import { ProductModel } from '../models/Product.js';
 import { OrderModel } from '../models/Order.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { buildIdFilter, normalizeDocs, normalizeDoc } from '../utils/dbUtils.js';
 
 function sanitizeUser(user: any) {
-  const userObject = user.toObject ? user.toObject() : user;
-  const { password, _id, __v, ...safeUser } = userObject;
-
+  if (!user) return null;
+  const userObject = user.toObject ? user.toObject() : { ...user };
+  const { password, __v, ...safeUser } = userObject;
+  safeUser.id = safeUser.id || (safeUser._id ? safeUser._id.toString() : '');
+  delete safeUser._id;
   return safeUser;
 }
 
@@ -23,11 +26,12 @@ export async function getAllUsersAdmin(
 ) {
   try {
     const users = await UserModel.find()
-      .select('-password -_id -__v')
-      .sort({ createdAt: -1 });
+      .select('-password -__v')
+      .sort({ createdAt: -1 })
+      .lean();
 
     return res.json({
-      users,
+      users: normalizeDocs(users),
     });
   } catch (error) {
     console.error('getAllUsersAdmin error:', error);
@@ -123,7 +127,7 @@ export async function updateUserRoleAdmin(
     }
 
     const updatedUser = await UserModel.findOneAndUpdate(
-      { id },
+      buildIdFilter(id),
       { $set: updates },
       {
         new: true,

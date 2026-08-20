@@ -1,7 +1,9 @@
 import { Response } from 'express';
+import mongoose from 'mongoose';
 import { UserModel } from '../models/User.js';
 import { ProductModel } from '../models/Product.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { buildIdFilter, normalizeDocs } from '../utils/dbUtils.js';
 
 // ========================
 // CART CONTROLLERS
@@ -13,7 +15,7 @@ export async function getCart(req: AuthRequest, res: Response) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const user = await UserModel.findOne({ id: req.user.id }).lean();
+    const user = await UserModel.findOne(buildIdFilter(req.user.id)).lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
@@ -37,7 +39,7 @@ export async function syncCart(req: AuthRequest, res: Response) {
     }
 
     const user = await UserModel.findOneAndUpdate(
-      { id: req.user.id },
+      buildIdFilter(req.user.id),
       { $set: { cart: items } },
       { new: true }
     ).lean();
@@ -60,7 +62,7 @@ export async function clearCart(req: AuthRequest, res: Response) {
     }
 
     await UserModel.updateOne(
-      { id: req.user.id },
+      buildIdFilter(req.user.id),
       { $set: { cart: [] } }
     );
 
@@ -81,15 +83,24 @@ export async function getWishlist(req: AuthRequest, res: Response) {
       return res.status(401).json({ message: 'Authentication required.' });
     }
 
-    const user = await UserModel.findOne({ id: req.user.id }).lean();
+    const user = await UserModel.findOne(buildIdFilter(req.user.id)).lean();
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
     const productIds = user.wishlist || [];
-    const products = await ProductModel.find({ id: { $in: productIds } }).lean();
+    const validObjectIds = productIds
+      .filter((pid: string) => mongoose.Types.ObjectId.isValid(pid))
+      .map((pid: string) => new mongoose.Types.ObjectId(pid));
 
-    return res.json({ wishlist: productIds, products });
+    const products = await ProductModel.find({
+      $or: [
+        { id: { $in: productIds } },
+        ...(validObjectIds.length > 0 ? [{ _id: { $in: validObjectIds } }] : [])
+      ]
+    }).lean();
+
+    return res.json({ wishlist: productIds, products: normalizeDocs(products) });
   } catch (error) {
     console.error('getWishlist error:', error);
     return res.status(500).json({ message: 'Error retrieving wishlist.' });
@@ -107,7 +118,7 @@ export async function toggleWishlist(req: AuthRequest, res: Response) {
       return res.status(400).json({ message: 'Product ID is required.' });
     }
 
-    const user = await UserModel.findOne({ id: req.user.id });
+    const user = await UserModel.findOne(buildIdFilter(req.user.id));
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }

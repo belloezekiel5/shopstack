@@ -47,8 +47,9 @@ const ProductSchema = new Schema<IProduct>(
   {
     id: {
       type: String,
-      required: true,
-      unique: true,
+      default: function () {
+        return (this as any)._id ? (this as any)._id.toString() : `prod_${Date.now()}`;
+      },
       index: true,
     },
 
@@ -130,6 +131,18 @@ const ProductSchema = new Schema<IProduct>(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform: function (_doc, ret: any) {
+        ret.id = ret.id || (ret._id ? ret._id.toString() : '');
+        return ret;
+      },
+    },
+    toObject: {
+      transform: function (_doc, ret: any) {
+        ret.id = ret.id || (ret._id ? ret._id.toString() : '');
+        return ret;
+      },
+    },
   }
 );
 

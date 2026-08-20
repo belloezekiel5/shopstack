@@ -5,17 +5,19 @@ import crypto from 'crypto';
 import { UserModel } from '../models/User.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { JWT_SECRET } from '../config/env.js';
-
+import { buildIdFilter } from '../utils/dbUtils.js';
 
 function generateToken(user: {
-  id: string;
+  id?: string;
+  _id?: any;
   email: string;
   role: string;
   name: string;
 }) {
+  const id = user.id || (user._id ? user._id.toString() : '');
   return jwt.sign(
     {
-      id: user.id,
+      id,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -26,9 +28,10 @@ function generateToken(user: {
 }
 
 function sanitizeUser(user: any) {
-  const userObject = user.toObject ? user.toObject() : user;
-  const { password, _id, __v, ...safeUser } = userObject;
-
+  if (!user) return null;
+  const userObject = user.toObject ? user.toObject() : { ...user };
+  const { password, __v, ...safeUser } = userObject;
+  safeUser.id = safeUser.id || (safeUser._id ? safeUser._id.toString() : '');
   return safeUser;
 }
 
@@ -175,9 +178,7 @@ export async function getMe(req: AuthRequest, res: Response) {
       });
     }
 
-    const user = await UserModel.findOne({
-      id: req.user.id,
-    });
+    const user = await UserModel.findOne(buildIdFilter(req.user.id));
 
     if (!user) {
       return res.status(404).json({
@@ -239,7 +240,7 @@ export async function updateProfile(req: AuthRequest, res: Response) {
     }
 
     const updatedUser = await UserModel.findOneAndUpdate(
-      { id: req.user.id },
+      buildIdFilter(req.user.id),
       { $set: updates },
       { new: true, runValidators: true }
     );

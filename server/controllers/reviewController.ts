@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { ProductModel } from '../models/Product.js';
 import { UserModel } from '../models/User.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { buildIdFilter, normalizeDoc } from '../utils/dbUtils.js';
 import crypto from 'crypto';
 
 export async function addReview(
@@ -40,10 +41,8 @@ export async function addReview(
       });
     }
 
-    // Find product
-    const product = await ProductModel.findOne({
-      id: productId,
-    });
+    // Find product by id or _id
+    const product = await ProductModel.findOne(buildIdFilter(productId));
 
     if (!product) {
       return res.status(404).json({
@@ -52,9 +51,7 @@ export async function addReview(
     }
 
     // Find user
-    const user = await UserModel.findOne({
-      id: req.user.id,
-    });
+    const user = await UserModel.findOne(buildIdFilter(req.user.id));
 
     // Create review
     const review = {

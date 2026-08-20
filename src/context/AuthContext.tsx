@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import { User } from '../types';
 import { api } from '../services/api';
 
 interface AuthContextType {
@@ -25,7 +25,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const res = await api.getCurrentUser();
         setUser(res.user);
       } catch (err) {
-        console.error('Failed to load authenticated user:', err);
+        console.error('Failed to load authenticated user from MongoDB:', err);
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -44,8 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('shopstack_token_v1');
-    localStorage.removeItem('shopstack_current_user_v1');
+    api.clearAuth();
     setUser(null);
   };
 

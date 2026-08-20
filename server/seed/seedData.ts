@@ -245,15 +245,78 @@ export const INITIAL_PRODUCTS = [
   }
 ];
 
+import { UserModel } from '../models/User.js';
+import bcrypt from 'bcryptjs';
+
 export async function seedMongoIfEmpty(): Promise<void> {
   try {
-    const productCount = await ProductModel.countDocuments();
-    if (productCount === 0) {
+    // 1. Check existing products and backfill missing 'id' fields
+    const existingProducts = await ProductModel.find({});
+    for (const p of existingProducts) {
+      if (!p.id && (p as any)._id) {
+        p.id = (p as any)._id.toString();
+        await p.save();
+      }
+    }
+
+    // 2. Ensure initial catalog products exist
+    if (existingProducts.length === 0) {
       console.log('[MongoDB Seed] No products found. Seeding initial catalog to MongoDB...');
       await ProductModel.insertMany(INITIAL_PRODUCTS);
       console.log(`[MongoDB Seed] Successfully seeded ${INITIAL_PRODUCTS.length} products to MongoDB.`);
+    } else {
+      // Upsert any missing initial products so catalog has full category breadth
+      for (const initial of INITIAL_PRODUCTS) {
+        const found = await ProductModel.findOne({
+          $or: [
+            { id: initial.id },
+            { name: initial.name }
+          ]
+        });
+        if (!found) {
+          await ProductModel.create(initial);
+          console.log(`[MongoDB Seed] Added missing catalog item: ${initial.name}`);
+        }
+      }
+    }
+
+    // 3. Ensure test admin and customer users exist in MongoDB
+    const adminEmail = 'admin@shopstack.com';
+    const adminUser = await UserModel.findOne({ email: adminEmail });
+    if (!adminUser) {
+      const hashedAdminPassword = await bcrypt.hash('admin123', 10);
+      await UserModel.create({
+        id: 'usr_admin_01',
+        name: 'ShopStack Admin',
+        email: adminEmail,
+        password: hashedAdminPassword,
+        role: 'admin',
+        isActive: true,
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+        cart: [],
+        wishlist: []
+      });
+      console.log('[MongoDB Seed] Created default admin account in MongoDB.');
+    }
+
+    const customerEmail = 'customer@shopstack.com';
+    const customerUser = await UserModel.findOne({ email: customerEmail });
+    if (!customerUser) {
+      const hashedCustPassword = await bcrypt.hash('customer123', 10);
+      await UserModel.create({
+        id: 'usr_cust_01',
+        name: 'Jordan Lee',
+        email: customerEmail,
+        password: hashedCustPassword,
+        role: 'customer',
+        isActive: true,
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+        cart: [],
+        wishlist: []
+      });
+      console.log('[MongoDB Seed] Created default customer account in MongoDB.');
     }
   } catch (err) {
-    console.error('[MongoDB Seed] Error during catalog seeding:', err);
+    console.error('[MongoDB Seed] Error during database synchronization/seeding:', err);
   }
 }

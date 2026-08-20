@@ -21,44 +21,23 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
-const CART_STORAGE_KEY = 'shopstack_cart_v1';
-const PROMO_STORAGE_KEY = 'shopstack_promo_v1';
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { success, error, info } = useToast();
   const { user } = useAuth();
   const isInitialLoad = useRef(true);
 
-  const [items, setItems] = useState<CartItem[]>(() => {
-    try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [items, setItems] = useState<CartItem[]>([]);
+  const [promoCode, setPromoCode] = useState<string | null>(null);
 
-  const [promoCode, setPromoCode] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(PROMO_STORAGE_KEY) || null;
-    } catch {
-      return null;
-    }
-  });
-
-  // When authenticated user changes, fetch remote cart from MongoDB
+  // When authenticated user changes, fetch cart directly from MongoDB
   useEffect(() => {
     let active = true;
     if (user) {
       api.getCart()
         .then((res) => {
           if (active && res.cart) {
-            // If remote has items, adopt remote; if remote empty but local has items, sync local to remote
-            if (res.cart.length > 0) {
-              setItems(res.cart);
-            } else if (items.length > 0) {
-              api.syncCart(items).catch(() => {});
-            }
+            setItems(res.cart);
           }
         })
         .catch(() => {})
@@ -76,8 +55,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Sync to MongoDB whenever items change if user is logged in
   useEffect(() => {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-
     if (user && !isInitialLoad.current) {
       const timer = setTimeout(() => {
         api.syncCart(items).catch(() => {});
@@ -86,48 +63,54 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [items, user]);
 
-  useEffect(() => {
-    if (promoCode) {
-      localStorage.setItem(PROMO_STORAGE_KEY, promoCode);
-    } else {
-      localStorage.removeItem(PROMO_STORAGE_KEY);
-    }
-  }, [promoCode]);
-
   const addToCart = (product: Product, quantity = 1) => {
     setItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      const existing = prev.find((item) => item.id === product.id || item.productId === product.id);
       const effectivePrice = product.discountPrice ?? product.price;
 
       if (existing) {
-        const nextQty = Math.min(product.stock, existing.quantity + quantity);
-        success(`Updated quantity for "${product.name}" (${nextQty} in cart)`);
+        const newQty = existing.quantity + quantity;
+        if (product.stock && newQty > product.stock) {
+          error(`Only ${product.stock} items available in stock.`);
+          return prev;
+        }
+        success(`Updated quantity for "${product.name}" in cart.`);
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: nextQty } : item
+          item.id === product.id || item.productId === product.id
+            ? { ...item, quantity: newQty }
+            : item
         );
       } else {
-        success(`Added "${product.name}" to cart!`);
-        return [
-          ...prev,
-          {
-            id: product.id,
-            name: product.name,
-            brand: product.brand,
-            category: product.category,
-            price: effectivePrice,
-            originalPrice: product.price,
-            image: product.images[0] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=200',
-            quantity: Math.min(product.stock, quantity),
-            stock: product.stock
-          }
-        ];
+        if (product.stock && quantity > product.stock) {
+          error(`Only ${product.stock} items available in stock.`);
+          return prev;
+        }
+        success(`Added "${product.name}" to cart.`);
+        const newItem: CartItem = {
+          id: product.id,
+          productId: product.id,
+          name: product.name,
+          brand: product.brand || '',
+          category: product.category,
+          price: effectivePrice,
+          originalPrice: product.price,
+          image: product.images && product.images[0] ? product.images[0] : '',
+          quantity,
+          stock: product.stock,
+        };
+        return [...prev, newItem];
       }
     });
   };
 
   const removeFromCart = (productId: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== productId));
-    info('Item removed from cart.');
+    setItems((prev) => {
+      const item = prev.find((i) => i.id === productId || i.productId === productId);
+      if (item) {
+        info(`Removed "${item.name}" from cart.`);
+      }
+      return prev.filter((i) => i.id !== productId && i.productId !== productId);
+    });
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
@@ -135,10 +118,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       removeFromCart(productId);
       return;
     }
+
     setItems((prev) =>
-      prev.map((item) =>
-        item.id === productId ? { ...item, quantity: Math.min(item.stock, quantity) } : item
-      )
+      prev.map((item) => {
+        if (item.id === productId || item.productId === productId) {
+          if (item.stock && quantity > item.stock) {
+            error(`Only ${item.stock} items available in stock.`);
+            return item;
+          }
+          return { ...item, quantity };
+        }
+        return item;
+      })
     );
   };
 
@@ -151,13 +142,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const applyPromoCode = (code: string): boolean => {
-    const clean = code.trim().toUpperCase();
-    if (clean === 'SHOP10' || clean === 'SUMMER20' || clean === 'FREESHIP') {
-      setPromoCode(clean);
-      success(`Promo code "${clean}" applied successfully!`);
+    const cleanCode = code.trim().toUpperCase();
+    if (cleanCode === 'SAVE10' || cleanCode === 'DISCOUNT20' || cleanCode === 'WELCOME15') {
+      setPromoCode(cleanCode);
+      success(`Promo code ${cleanCode} applied!`);
       return true;
     } else {
-      error('Invalid promo code. Try "SHOP10" or "SUMMER20".');
+      error('Invalid promo code. Try SAVE10, DISCOUNT20, or WELCOME15.');
       return false;
     }
   };
@@ -167,34 +158,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     info('Promo code removed.');
   };
 
-  const itemCount = useMemo(
-    () => items.reduce((acc, item) => acc + item.quantity, 0),
-    [items]
-  );
+  const subtotal = useMemo(() => {
+    return items.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  }, [items]);
 
-  const subtotal = useMemo(
-    () => items.reduce((acc, item) => acc + item.price * item.quantity, 0),
-    [items]
-  );
+  const itemCount = useMemo(() => {
+    return items.reduce((acc, item) => acc + item.quantity, 0);
+  }, [items]);
 
-  // Free shipping on orders >= $50 or code 'FREESHIP'
   const shipping = useMemo(() => {
-    if (items.length === 0) return 0;
-    if (promoCode === 'FREESHIP' || subtotal >= 50) return 0;
-    return 9.99;
-  }, [items, promoCode, subtotal]);
+    if (subtotal === 0) return 0;
+    return subtotal > 50 ? 0 : 9.99;
+  }, [subtotal]);
 
   const discount = useMemo(() => {
-    if (!promoCode || items.length === 0) return 0;
-    if (promoCode === 'SHOP10') return subtotal * 0.1;
-    if (promoCode === 'SUMMER20') return subtotal * 0.2;
+    if (!promoCode || subtotal === 0) return 0;
+    if (promoCode === 'SAVE10') return subtotal * 0.1;
+    if (promoCode === 'DISCOUNT20') return subtotal * 0.2;
+    if (promoCode === 'WELCOME15') return subtotal * 0.15;
     return 0;
-  }, [promoCode, items, subtotal]);
+  }, [promoCode, subtotal]);
 
   const total = useMemo(() => {
-    if (items.length === 0) return 0;
     return Math.max(0, subtotal + shipping - discount);
-  }, [items, subtotal, shipping, discount]);
+  }, [subtotal, shipping, discount]);
 
   return (
     <CartContext.Provider
@@ -211,7 +198,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateQuantity,
         clearCart,
         applyPromoCode,
-        removePromoCode
+        removePromoCode,
       }}
     >
       {children}

@@ -12,22 +12,14 @@ interface WishlistContextType {
 }
 
 const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
-const WISHLIST_STORAGE_KEY = 'shopstack_wishlist_v1';
 
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { info, success } = useToast();
   const { user } = useAuth();
 
-  const [items, setItems] = useState<Product[]>(() => {
-    try {
-      const raw = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [items, setItems] = useState<Product[]>([]);
 
-  // When user logs in, load wishlist from MongoDB
+  // When user logs in, load wishlist directly from MongoDB
   useEffect(() => {
     let active = true;
     if (user) {
@@ -38,16 +30,14 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           }
         })
         .catch(() => {});
+    } else {
+      setItems([]);
     }
 
     return () => {
       active = false;
     };
   }, [user?.id]);
-
-  useEffect(() => {
-    localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
 
   const isInWishlist = (productId: string) => {
     return items.some((item) => item.id === productId);
@@ -80,7 +70,7 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         items,
         isInWishlist,
         toggleWishlist,
-        removeFromWishlist
+        removeFromWishlist,
       }}
     >
       {children}

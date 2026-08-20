@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { OrderModel } from '../models/Order.js';
 import { ProductModel } from '../models/Product.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { buildIdFilter, normalizeDoc, normalizeDocs } from '../utils/dbUtils.js';
 
 export async function createOrder(req: AuthRequest, res: Response) {
   try {
@@ -40,9 +41,7 @@ export async function createOrder(req: AuthRequest, res: Response) {
     let calculatedSubtotal = 0;
 
     for (const item of items) {
-      const product = await ProductModel.findOne({
-        id: item.productId,
-      });
+      const product = await ProductModel.findOne(buildIdFilter(item.productId));
 
       if (!product) {
         return res.status(400).json({
@@ -69,7 +68,7 @@ export async function createOrder(req: AuthRequest, res: Response) {
       calculatedSubtotal += itemPrice * quantity;
 
       verifiedItems.push({
-        productId: product.id,
+        productId: product.id || (product as any)._id?.toString(),
         name: product.name,
         image: product.images[0] || '',
         price: itemPrice,
@@ -91,7 +90,7 @@ export async function createOrder(req: AuthRequest, res: Response) {
     // Reduce product stock
     for (const item of verifiedItems) {
       await ProductModel.updateOne(
-        { id: item.productId },
+        buildIdFilter(item.productId),
         { $inc: { stock: -item.quantity } }
       );
     }
@@ -170,7 +169,7 @@ export async function getMyOrders(
       .lean();
 
     return res.json({
-      orders,
+      orders: normalizeDocs(orders),
     });
   } catch (error) {
     console.error('getMyOrders error:', error);
@@ -195,15 +194,15 @@ export async function getOrderById(
 
     const { id } = req.params;
 
-    const order = await OrderModel.findOne({
-      id,
-    }).lean();
+    const rawOrder = await OrderModel.findOne(buildIdFilter(id)).lean();
 
-    if (!order) {
+    if (!rawOrder) {
       return res.status(404).json({
         message: 'Order not found.',
       });
     }
+
+    const order = normalizeDoc(rawOrder)!;
 
     // User must own the order unless they are an admin
     if (

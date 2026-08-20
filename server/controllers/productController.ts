@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { ProductModel } from '../models/Product.js';
+import { buildIdFilter, normalizeDoc, normalizeDocs } from '../utils/dbUtils.js';
 
 export async function getProducts(req: Request, res: Response) {
   try {
@@ -148,8 +149,10 @@ export async function getProducts(req: Request, res: Response) {
 
     const totalPages = Math.ceil(total / limitNum) || 1;
 
+    const normalized = normalizeDocs(products);
+
     return res.json({
-      products,
+      products: normalized,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -172,20 +175,24 @@ export async function getProductById(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    const product = await ProductModel.findOne({ id }).lean();
+    const rawProduct = await ProductModel.findOne(buildIdFilter(id)).lean();
 
-    if (!product) {
+    if (!rawProduct) {
       return res.status(404).json({
         message: 'Product not found.'
       });
     }
 
-    const related = await ProductModel.find({
+    const product = normalizeDoc(rawProduct)!;
+
+    const relatedRaw = await ProductModel.find({
       category: product.category,
-      id: { $ne: product.id }
+      _id: { $ne: (rawProduct as any)._id }
     })
       .limit(4)
       .lean();
+
+    const related = normalizeDocs(relatedRaw);
 
     return res.json({
       product,
@@ -378,7 +385,7 @@ export async function updateProduct(req: Request, res: Response) {
     }
 
     const updated = await ProductModel.findOneAndUpdate(
-      { id },
+      buildIdFilter(id),
       updates,
       {
         new: true,
@@ -393,7 +400,7 @@ export async function updateProduct(req: Request, res: Response) {
     }
 
     return res.json({
-      product: updated,
+      product: normalizeDoc(updated),
       message: 'Product updated successfully.'
     });
 
@@ -417,7 +424,7 @@ export async function deleteProduct(req: Request, res: Response) {
   try {
     const { id } = req.params;
 
-    const deleted = await ProductModel.findOneAndDelete({ id });
+    const deleted = await ProductModel.findOneAndDelete(buildIdFilter(id));
 
     if (!deleted) {
       return res.status(404).json({

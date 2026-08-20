@@ -1,11 +1,40 @@
 import { Product, Category, Order, User, AdminStats, OrderStatus, UserRole, CartItem } from '../types';
 
-const AUTH_TOKEN_KEY = 'shopstack_token_v1';
-const AUTH_USER_KEY = 'shopstack_current_user_v1';
+const AUTH_TOKEN_SESSION_KEY = 'shopstack_session_token';
+
+// In-memory + sessionStorage token store (NO localStorage)
+let memoryToken: string | null = null;
+
+function getToken(): string | null {
+  if (memoryToken) return memoryToken;
+  try {
+    const val = sessionStorage.getItem(AUTH_TOKEN_SESSION_KEY);
+    if (val) {
+      memoryToken = val;
+      return val;
+    }
+  } catch {
+    // sessionStorage fallback to in-memory
+  }
+  return null;
+}
+
+function setToken(token: string | null): void {
+  memoryToken = token;
+  try {
+    if (token) {
+      sessionStorage.setItem(AUTH_TOKEN_SESSION_KEY, token);
+    } else {
+      sessionStorage.removeItem(AUTH_TOKEN_SESSION_KEY);
+    }
+  } catch {
+    // Ignore session storage error
+  }
+}
 
 // Helper for API fetch
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const token = getToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -30,6 +59,13 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
 }
 
 export const api = {
+  // Token management
+  getToken,
+  setToken,
+  clearAuth() {
+    setToken(null);
+  },
+
   // Database status
   async getDatabaseStatus(): Promise<{ database: { isConfigured: boolean; status: string; host: string | null; name: string | null } }> {
     try {
@@ -40,7 +76,7 @@ export const api = {
     }
   },
 
-  // Auth
+  // Auth (Direct MongoDB queries)
   async login(email: string, password: string): Promise<{ token: string; user: User }> {
     const res = await apiRequest<{ token: string; user: User }>('/auth/login', {
       method: 'POST',
@@ -48,8 +84,7 @@ export const api = {
     });
 
     if (res.token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, res.token);
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.user));
+      setToken(res.token);
     }
 
     return res;
@@ -62,8 +97,7 @@ export const api = {
     });
 
     if (res.token) {
-      localStorage.setItem(AUTH_TOKEN_KEY, res.token);
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.user));
+      setToken(res.token);
     }
 
     return res;
@@ -71,15 +105,13 @@ export const api = {
 
   async getCurrentUser(): Promise<{ user: User | null }> {
     try {
-      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      const token = getToken();
       if (!token) return { user: null };
 
       const res = await apiRequest<{ user: User }>('/auth/me');
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.user));
       return res;
     } catch {
-      const cached = localStorage.getItem(AUTH_USER_KEY);
-      return { user: cached ? JSON.parse(cached) : null };
+      return { user: null };
     }
   },
 
@@ -88,15 +120,10 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
-
-    if (res.user) {
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.user));
-    }
-
     return res;
   },
 
-  // Cart API (MongoDB)
+  // Cart API (Direct MongoDB persistence)
   async getCart(): Promise<{ cart: CartItem[] }> {
     return apiRequest<{ cart: CartItem[] }>('/cart');
   },
@@ -114,7 +141,7 @@ export const api = {
     });
   },
 
-  // Wishlist API (MongoDB)
+  // Wishlist API (Direct MongoDB persistence)
   async getWishlist(): Promise<{ wishlist: string[]; products: Product[] }> {
     return apiRequest<{ wishlist: string[]; products: Product[] }>('/wishlist');
   },
@@ -126,7 +153,7 @@ export const api = {
     });
   },
 
-  // Products
+  // Products (Direct MongoDB catalog)
   async getProducts(params?: Record<string, any>): Promise<{ products: Product[]; pagination: any }> {
     const query = new URLSearchParams();
     if (params) {
@@ -156,7 +183,7 @@ export const api = {
     });
   },
 
-  // Orders
+  // Orders (Direct MongoDB orders)
   async getMyOrders(): Promise<{ orders: Order[] }> {
     return apiRequest<{ orders: Order[] }>('/orders/my-orders');
   },
@@ -172,7 +199,7 @@ export const api = {
     });
   },
 
-  // Admin API
+  // Admin API (Direct MongoDB aggregation & queries)
   async getAdminStats(): Promise<AdminStats> {
     const res = await apiRequest<any>('/admin/stats');
     const statsData = res.stats || res;

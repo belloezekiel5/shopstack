@@ -56,6 +56,7 @@ export interface Category {
 
 export interface CartItem {
   id: string; // product id
+  productId?: string;
   name: string;
   brand: string;
   category: string;
