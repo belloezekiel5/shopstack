@@ -1,15 +1,11 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import apiRouter from './server/routes/api.js';
 import { connectMongoDB } from './server/db.js';
 import { seedMongoIfEmpty } from './server/seed/seedData.js';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
