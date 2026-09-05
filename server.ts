@@ -17,11 +17,26 @@ const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .filter(Boolean);
 
 function isAllowedOrigin(origin: string): boolean {
-  if (allowedOrigins.includes(origin)) return true;
+  if (!origin) return true;
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
   try {
     const hostname = new URL(origin).hostname;
-    // Allow all Vercel preview/production deployment URLs by default.
+    // Allow all Cloud Run & AI Studio preview / shared URLs
+    if (hostname.endsWith('.run.app')) return true;
+    // Allow all Vercel preview/production deployment URLs by default
     if (hostname.endsWith('.vercel.app')) return true;
+    // Allow Railway deployment URLs
+    if (hostname.endsWith('.railway.app') || hostname.endsWith('.up.railway.app')) return true;
+    // Allow local development hosts
+    if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
+    // Allow configured APP_URL
+    if (process.env.APP_URL) {
+      try {
+        if (new URL(process.env.APP_URL).hostname === hostname) return true;
+      } catch {
+        // ignore invalid URL
+      }
+    }
   } catch {
     // ignore malformed origin header
   }
@@ -44,7 +59,7 @@ async function startServer() {
         if (!origin || isAllowedOrigin(origin)) {
           callback(null, true);
         } else {
-          callback(new Error(`Not allowed by CORS: ${origin}`));
+          callback(null, false);
         }
       },
     })

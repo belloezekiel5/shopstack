@@ -43,16 +43,29 @@ export const ShopPage: React.FC = () => {
           api.getCategories()
         ]);
 
-        let list = prodRes.products;
+        const rawProducts = Array.isArray(prodRes?.products)
+          ? prodRes.products
+          : Array.isArray(prodRes)
+          ? prodRes
+          : [];
+        let list = rawProducts;
         if (discountParam) {
-          list = list.filter((p) => p.discountPrice && p.discountPrice < p.price);
+          list = list.filter((p) => p && p.discountPrice && p.discountPrice < p.price);
         }
 
         setProducts(list);
         setTotalCount(list.length);
-        setCategories(catRes.categories);
+        const catList = Array.isArray(catRes?.categories)
+          ? catRes.categories
+          : Array.isArray(catRes)
+          ? catRes
+          : [];
+        setCategories(catList);
       } catch (err) {
         console.error('Failed to load shop catalog:', err);
+        setProducts([]);
+        setTotalCount(0);
+        setCategories([]);
       } finally {
         setIsLoading(false);
       }

@@ -7,7 +7,32 @@ const AUTH_TOKEN_SESSION_KEY = 'shopstack_session_token';
 // deployed separately from the backend (e.g. on Vercel). Left unset, calls
 // stay relative to the current origin, which is correct for local dev or
 // when frontend + backend are served from the same host.
-const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+function getApiBaseUrl(): string {
+  const envUrl = (import.meta.env.VITE_API_URL || '').trim();
+  if (!envUrl) return '';
+
+  // In local dev or AI Studio preview container, prefer relative same-origin /api unless running on a distinct frontend host (e.g. Vercel)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    const isAiStudioOrLocal =
+      hostname.endsWith('.run.app') ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1';
+
+    if (isAiStudioOrLocal) {
+      return '';
+    }
+  }
+
+  // Ensure scheme exists so browser doesn't treat as relative path
+  let formatted = envUrl;
+  if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+    formatted = `https://${formatted}`;
+  }
+  return formatted.replace(/\/+$/, '');
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 // In-memory + sessionStorage token store (NO localStorage)
 let memoryToken: string | null = null;
@@ -51,15 +76,48 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}/api${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const primaryUrl = `${API_BASE_URL}/api${endpoint}`;
 
-  const data = await response.json().catch(() => ({ message: 'Network response error.' }));
+  let response: Response;
+  try {
+    response = await fetch(primaryUrl, {
+      ...options,
+      headers,
+    });
+  } catch (err: any) {
+    // If external API_BASE_URL failed (e.g. network/DNS failure), attempt local /api fallback
+    if (API_BASE_URL) {
+      try {
+        response = await fetch(`/api${endpoint}`, { ...options, headers });
+      } catch {
+        throw new Error(err?.message || 'Network connection error.');
+      }
+    } else {
+      throw new Error(err?.message || 'Network connection error.');
+    }
+  }
+
+  // If external host returned 502/503/504 Bad Gateway, try local /api fallback if available
+  if (API_BASE_URL && (response.status === 502 || response.status === 503 || response.status === 504)) {
+    try {
+      const localResponse = await fetch(`/api${endpoint}`, { ...options, headers });
+      if (localResponse.ok) {
+        response = localResponse;
+      }
+    } catch {
+      // Keep original response
+    }
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Server returned unexpected response (${response.status} ${response.statusText}). Expected JSON.`);
+  }
+
+  const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || `Request failed with status ${response.status}`);
+    throw new Error(data.message || data.error || `Request failed with status ${response.status}`);
   }
 
   return data as T;

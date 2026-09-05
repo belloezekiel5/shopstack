@@ -31,11 +31,24 @@ export const HomePage: React.FC = () => {
           api.getProducts({ limit: 12 }),
           api.getCategories()
         ]);
-        setAllProducts(prodRes.products);
-        setFeaturedProducts(prodRes.products.filter((p) => p.featured));
-        setCategories(catRes.categories);
+        const productList = Array.isArray(prodRes?.products)
+          ? prodRes.products
+          : Array.isArray(prodRes)
+          ? prodRes
+          : [];
+        const categoryList = Array.isArray(catRes?.categories)
+          ? catRes.categories
+          : Array.isArray(catRes)
+          ? catRes
+          : [];
+        setAllProducts(productList);
+        setFeaturedProducts(productList.filter((p) => p && p.featured));
+        setCategories(categoryList);
       } catch (err) {
         console.error('Failed to load homepage data:', err);
+        setAllProducts([]);
+        setFeaturedProducts([]);
+        setCategories([]);
       } finally {
         setIsLoading(false);
       }
@@ -43,10 +56,15 @@ export const HomePage: React.FC = () => {
     loadHomeData();
   }, []);
 
+  const safeProducts = Array.isArray(allProducts) ? allProducts : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+
   const displayProducts =
     selectedCategory === 'All'
-      ? allProducts
-      : allProducts.filter((p) => p.category.toLowerCase() === selectedCategory.toLowerCase());
+      ? safeProducts
+      : safeProducts.filter(
+          (p) => p && p.category && p.category.toLowerCase() === selectedCategory.toLowerCase()
+        );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 lg:px-10 py-6 sm:py-8 space-y-12">
@@ -126,7 +144,7 @@ export const HomePage: React.FC = () => {
             >
               All
             </button>
-            {categories.map((c) => (
+            {safeCategories.map((c) => (
               <button
                 key={c.name}
                 onClick={() => setSelectedCategory(c.name)}
@@ -144,7 +162,7 @@ export const HomePage: React.FC = () => {
 
         {/* Category overview cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {categories.map((cat) => (
+          {safeCategories.map((cat) => (
             <CategoryCard key={cat.name} category={cat} />
           ))}
         </div>

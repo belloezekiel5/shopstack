@@ -48,10 +48,12 @@ export const ProductDetailPage: React.FC = () => {
       try {
         setIsLoading(true);
         const res = await api.getProductById(id);
-        setProduct(res.product);
-        setRelated(res.related);
-        setSelectedImage(res.product.images[0]);
-        setQuantity(1);
+        if (res?.product) {
+          setProduct(res.product);
+          setRelated(Array.isArray(res.related) ? res.related : []);
+          setSelectedImage(res.product.images?.[0] || '');
+          setQuantity(1);
+        }
       } catch (err: any) {
         error(err.message || 'Product not found.');
         navigate('/shop');
