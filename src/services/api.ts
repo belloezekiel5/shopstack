@@ -2,6 +2,13 @@ import { Product, Category, Order, User, AdminStats, OrderStatus, UserRole, Cart
 
 const AUTH_TOKEN_SESSION_KEY = 'shopstack_session_token';
 
+// Base URL of the backend API. Set VITE_API_URL to your Railway backend URL
+// (e.g. https://shopstack-production.up.railway.app) when the frontend is
+// deployed separately from the backend (e.g. on Vercel). Left unset, calls
+// stay relative to the current origin, which is correct for local dev or
+// when frontend + backend are served from the same host.
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 // In-memory + sessionStorage token store (NO localStorage)
 let memoryToken: string | null = null;
 
@@ -44,7 +51,7 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`/api${endpoint}`, {
+  const response = await fetch(`${API_BASE_URL}/api${endpoint}`, {
     ...options,
     headers,
   });
