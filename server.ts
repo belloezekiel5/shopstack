@@ -8,9 +8,7 @@ import { seedMongoIfEmpty } from './server/seed/seedData.js';
 
 dotenv.config();
 
-// Origins allowed to call this API cross-origin (e.g. your Vercel frontend).
-// Set CORS_ORIGINS to a comma-separated list, e.g.:
-//   CORS_ORIGINS=https://shopstack.vercel.app,http://localhost:5173
+
 const allowedOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map((o) => o.trim())
@@ -21,41 +19,38 @@ function isAllowedOrigin(origin: string): boolean {
   if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true;
   try {
     const hostname = new URL(origin).hostname;
-    // Allow all Cloud Run & AI Studio preview / shared URLs
+    
     if (hostname.endsWith('.run.app')) return true;
-    // Allow all Vercel preview/production deployment URLs by default
+    
     if (hostname.endsWith('.vercel.app')) return true;
-    // Allow Railway deployment URLs
+    
     if (hostname.endsWith('.railway.app') || hostname.endsWith('.up.railway.app')) return true;
-    // Allow local development hosts
+    
     if (hostname === 'localhost' || hostname === '127.0.0.1') return true;
-    // Allow configured APP_URL
+    
     if (process.env.APP_URL) {
       try {
         if (new URL(process.env.APP_URL).hostname === hostname) return true;
       } catch {
-        // ignore invalid URL
+        
       }
     }
   } catch {
-    // ignore malformed origin header
+    
   }
   return false;
 }
 
 async function startServer() {
   const app = express();
-  // Railway (and most hosts) assign the port via the PORT env var at
-  // runtime — binding to a hardcoded port means the platform can't route
-  // traffic to the app. Falls back to 3000 for local dev.
+  
   const PORT = Number(process.env.PORT) || 3000;
 
-  // CORS (must be registered before routes). We use Bearer tokens, not
-  // cookies, so credentials: true is not needed here.
+  
   app.use(
     cors({
       origin(origin, callback) {
-        // No origin header = same-origin request, curl, server-to-server, etc.
+        
         if (!origin || isAllowedOrigin(origin)) {
           callback(null, true);
         } else {
@@ -65,19 +60,19 @@ async function startServer() {
     })
   );
 
-  // Middleware
+  
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
-  // API Router FIRST
+  
   app.use('/api', apiRouter);
 
-  // Health check endpoint
+  
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Vite middleware for development
+  
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
