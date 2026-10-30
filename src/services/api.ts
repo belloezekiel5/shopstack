@@ -29,7 +29,9 @@ function getApiBaseUrl(): string {
   if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
     formatted = `https://${formatted}`;
   }
-  return formatted.replace(/\/+$/, '');
+  // Strip trailing slashes and a trailing "/api" (requests already add it),
+  // so both "https://x.up.railway.app" and "https://x.up.railway.app/api/" work.
+  return formatted.replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
 const API_BASE_URL = getApiBaseUrl();
@@ -85,33 +87,21 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
       headers,
     });
   } catch (err: any) {
-    // If external API_BASE_URL failed (e.g. network/DNS failure), attempt local /api fallback
-    if (API_BASE_URL) {
-      try {
-        response = await fetch(`/api${endpoint}`, { ...options, headers });
-      } catch {
-        throw new Error(err?.message || 'Network connection error.');
-      }
-    } else {
-      throw new Error(err?.message || 'Network connection error.');
-    }
-  }
-
-  // If external host returned 502/503/504 Bad Gateway, try local /api fallback if available
-  if (API_BASE_URL && (response.status === 502 || response.status === 503 || response.status === 504)) {
-    try {
-      const localResponse = await fetch(`/api${endpoint}`, { ...options, headers });
-      if (localResponse.ok) {
-        response = localResponse;
-      }
-    } catch {
-      // Keep original response
-    }
+    // A network failure here is usually the backend being down or blocking
+    // this origin via CORS (the browser console shows which).
+    throw new Error(
+      API_BASE_URL
+        ? `Could not reach the API at ${API_BASE_URL}. Check that the backend is running and allows this origin (CORS).`
+        : err?.message || 'Network connection error.'
+    );
   }
 
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    throw new Error(`Server returned unexpected response (${response.status} ${response.statusText}). Expected JSON.`);
+    throw new Error(
+      `Server returned unexpected response (${response.status} ${response.statusText}). Expected JSON.` +
+        (API_BASE_URL ? '' : ' If the frontend is hosted separately (e.g. Vercel), set VITE_API_URL to the backend URL and redeploy.')
+    );
   }
 
   const data = await response.json();
